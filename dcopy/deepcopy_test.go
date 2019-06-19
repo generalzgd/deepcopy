@@ -188,7 +188,38 @@ func TestDeepCopy(t *testing.T) {
 }
 
 
+func TestDeepCopyFromBytes(t *testing.T) {
+	type Args struct {
+		AA int `json:"aa"`
+	}
 
+	type args struct {
+		dest interface{}
+		from []byte
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		// TODO: Add test cases.
+		{
+			name:"t1",
+			args:args{
+				dest:&Args{},
+				from: []byte(`{"aa":"123"}`),
+			},
+			wantErr:false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := DeepCopyFromBytes(tt.args.dest, tt.args.from); (err != nil) != tt.wantErr {
+				t.Errorf("DeepCopyFromBytes() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
 
 
 

@@ -11,6 +11,7 @@
 package dcopy
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -53,6 +54,14 @@ func printlog(args ...interface{}) {
 	}
 }
 
+func DeepCopyFromBytes(dest interface{}, from []byte) (err error) {
+	tmp := map[string]interface{}{}
+	if err := json.Unmarshal(from, &tmp); err != nil {
+		return err
+	}
+	return DeepCopy(dest, tmp)
+}
+
 func DeepCopy(i interface{}, from interface{}) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -71,7 +80,7 @@ func DeepCopy(i interface{}, from interface{}) (err error) {
 }
 
 // 将泛型数据map[string]interface{}, 通过reflect深度拷贝到对应的结构体中
-// 如果直接调用此方法，需要外部捕获panic
+// 如果直接调用此方法，需要外部捕获panic，以防程序panic而退出
 func ValueDeepCopy(inst reflect.Value, from interface{}, deep int, fieldName string) (err error) {
 	if !inst.CanSet() {
 		return errors.New("target cannt be set")
