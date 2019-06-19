@@ -10,8 +10,10 @@
 过程2：再根据已定义好的结构体类型，进行拷贝数据和转换类型；
 在两个过程中都使用了一次反射，性能有所开销
 
-#useage:
-bytes := []byte(`{...json数据...}`) //举例
+#usage:
+
+```
+bytes := []byte({...json数据...}) //举例, 具体可参考deepcopy_test.go文件
 
 var testDetail map[string]interface{}
 if err := json.Unmarshal(bytes, &testDetail); err != nil {
@@ -25,3 +27,7 @@ if err := dcopy.DeepCopy(target, testDetail); err != nil {
 } else {
     fmt.Println("deep copy run ok.", target)
 }
+```
+
+
+
