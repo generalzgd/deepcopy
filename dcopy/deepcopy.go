@@ -11,14 +11,14 @@
 package dcopy
 
 import (
+	libs "deepcopy/libtools"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/toolkits/slice"
 	"reflect"
 	"strings"
 
-	"svr-frame/libs"
+	"github.com/toolkits/slice"
 )
 
 var (
@@ -30,23 +30,25 @@ func SetLog(status bool) {
 }
 
 // 获取字段名，优先使用json tag, 然后使用xorm tag, 如果没有则使用字段名的小驼峰格式
-func getFieldTag(fieldType reflect.StructField) string {
+func getFieldTag(fieldType reflect.StructField) (string, bool) {
 	fieldName := fieldType.Tag.Get("json")
+	omitempty := false
 	if len(fieldName) < 1 || fieldName == "-" {
 		//
 		fieldName = fieldType.Tag.Get("xorm")
 		if len(fieldName) > 0 && fieldName != "extends" {
-			return fieldName
+			return fieldName, false
 		}
 		//
 		fieldName = fieldType.Name
-		return libs.LowCaseString(fieldName)
+		return libs.LowCaseString(fieldName), false
 	}
 
 	if trr := strings.Split(fieldName, ","); len(trr) > 1 {
 		fieldName = strings.TrimSpace(trr[0]) // 过滤掉omitempty
+		omitempty = trr[1] == "omitempty"
 	}
-	return fieldName
+	return fieldName, omitempty
 }
 
 func getDeepIndent(deep int) string {
@@ -114,10 +116,12 @@ func valueDeepCopy(inst reflect.Value, from interface{}, deep int, fieldName str
 
 	// printlog("target name>>:", inst.Type().String(), inst.Kind())
 	switch inst.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		v := int64(libs.Interface2Int(from))
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		v := libs.Interface2Int64(from)
 		inst.SetInt(v)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		v := libs.Interface2Uint64(from)
+		inst.SetUint(v)
 	case reflect.Float32, reflect.Float64:
 		v := libs.Interface2Float64(from)
 		inst.SetFloat(v)
@@ -148,7 +152,7 @@ func valueDeepCopy(inst reflect.Value, from interface{}, deep int, fieldName str
 				fieldType := inst.Type().Field(i)
 				field := inst.Field(i)
 
-				fieldName := getFieldTag(fieldType)
+				fieldName, _ := getFieldTag(fieldType)
 				fieldValue, ok := mp[fieldName]
 				if !ok || fieldValue == nil {
 					continue
@@ -363,32 +367,41 @@ func instanceToMap(dest map[string]interface{}, from reflect.Value, deep int) (e
 	for i := 0; i < from.NumField(); i++ {
 		field := from.Field(i)
 		fieldType := from.Type().Field(i)
-		fieldName := getFieldTag(fieldType)
+		fieldName, omitempty := getFieldTag(fieldType)
 		if field.Kind() == reflect.Ptr {
 			field = field.Elem()
 		}
-		printLog(deep, "kind:", field.Kind(), "fieldName:", fieldName, "value:", field.Interface())
+		printLog(deep, "kind:", field.Kind(), "fieldName:", fieldName, "value:", field.Interface(), "omitempty:", omitempty)
 		switch field.Kind() {
 		case reflect.Struct:
 			subMap := make(map[string]interface{}, field.NumField())
 			dest[fieldName] = subMap
-			if err = instanceToMap(subMap, field, deep +1); err != nil {
+			if err = instanceToMap(subMap, field, deep+1); err != nil {
 				return
 			}
 		case reflect.Map:
 			keys := field.MapKeys()
+			if len(keys) == 0 && omitempty {
+				continue
+			}
 			subMap := make(map[string]interface{}, len(keys))
 			dest[fieldName] = subMap
-			if err = instanceMapToMap(subMap, field, deep + 1); err != nil {
+			if err = instanceMapToMap(subMap, field, deep+1); err != nil {
 				return
 			}
 		case reflect.Slice:
+			if field.Len() == 0 && omitempty {
+				continue
+			}
 			subSlice := make([]interface{}, field.Len())
 			dest[fieldName] = subSlice
-			if err = instanceSliceToArr(subSlice, field, deep + 1); err != nil {
+			if err = instanceSliceToArr(subSlice, field, deep+1); err != nil {
 				return
 			}
 		default:
+			if valueEmpty(field.Interface()) && omitempty {
+				continue
+			}
 			dest[fieldName] = field.Interface()
 		}
 	}
@@ -414,14 +427,14 @@ func instanceMapToMap(dest map[string]interface{}, field reflect.Value, deep int
 		case reflect.Struct:
 			subMap := make(map[string]interface{}, subField.NumField())
 			dest[keyStr] = subMap
-			if err := instanceToMap(subMap, subField, deep +1 ); err != nil {
+			if err := instanceToMap(subMap, subField, deep+1); err != nil {
 				return err
 			}
 		case reflect.Map:
 			keys := subField.MapKeys()
 			subMap := make(map[string]interface{}, len(keys))
 			dest[keyStr] = subMap
-			if err := instanceMapToMap(subMap, subField, deep +1); err != nil {
+			if err := instanceMapToMap(subMap, subField, deep+1); err != nil {
 				return err
 			}
 		case reflect.Slice:
@@ -465,7 +478,7 @@ func instanceSliceToArr(dest []interface{}, field reflect.Value, deep int) error
 		case reflect.Slice:
 			subSlice := make([]interface{}, item.Len())
 			dest[i] = subSlice
-			if err := instanceSliceToArr(subSlice, item,deep+1); err != nil {
+			if err := instanceSliceToArr(subSlice, item, deep+1); err != nil {
 				return err
 			}
 		default:
@@ -473,4 +486,19 @@ func instanceSliceToArr(dest []interface{}, field reflect.Value, deep int) error
 		}
 	}
 	return nil
+}
+
+func valueEmpty(v interface{}) bool {
+	switch d := v.(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return d == 0
+	case string:
+		return d == ""
+	case float64, float32:
+		return d == 0.0
+	case bool:
+		return d
+	default:
+		return d == nil
+	}
 }

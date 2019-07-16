@@ -8,12 +8,13 @@
  * @file: objutil.go
  * @time: 2017/9/30 10:38
  */
-package libs
+package libtools
 
 import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 )
 
 func Interface2Int(v interface{}) int {
@@ -119,5 +120,25 @@ func Interface2String(v interface{}) string {
 	default:
 		return fmt.Sprintf("%v", d)
 	}
-	return ""
+}
+
+
+// 首字母大写，不含unicode
+func UpCaseString(str string) string {
+	if len(str) < 1 {
+		return str
+	}
+
+	first := string(str[0])
+	tail := str[1:]
+	return strings.ToUpper(first) + tail
+}
+
+func LowCaseString(str string) string {
+	if len(str) < 1 {
+		return str
+	}
+	first := string(str[0])
+	tail := str[1:]
+	return strings.ToLower(first) + tail
 }
