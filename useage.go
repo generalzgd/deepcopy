@@ -13,7 +13,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"dcopy"
+	"github.com/generalzgd/deepcopy/dcopy"
 )
 
 func main() {
@@ -29,7 +29,7 @@ func main() {
 
 	target := &dcopy.CopyStruct{}
 	dcopy.SetLog(true)
-	if err := dcopy.DeepCopy(target, testDetail); err != nil {
+	if err := dcopy.InstanceFromMap(target, testDetail); err != nil {
 		fmt.Println("deep copy run err.", err)
 	} else {
 		fmt.Println("deep copy run ok.", target)

@@ -11,10 +11,10 @@
 package dcopy
 
 import (
-	libs "deepcopy/libtools"
 	"encoding/json"
 	"errors"
 	"fmt"
+	libs "github.com/generalzgd/deepcopy/libtools"
 	"reflect"
 	"strings"
 
