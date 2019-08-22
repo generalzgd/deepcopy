@@ -14,11 +14,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	libs "github.com/generalzgd/deepcopy/libtools"
 	"reflect"
 	"strings"
 
 	"github.com/toolkits/slice"
+
+	libs "github.com/generalzgd/deepcopy/libtools"
 )
 
 var (
@@ -490,14 +491,16 @@ func instanceSliceToArr(dest []interface{}, field reflect.Value, deep int) error
 
 func valueEmpty(v interface{}) bool {
 	switch d := v.(type) {
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		return d == 0
+	case int, int8, int16, int32, int64:
+		return reflect.ValueOf(v).Int() == 0
+	case uint, uint8, uint16, uint32, uint64:
+		return reflect.ValueOf(v).Uint() == 0
 	case string:
-		return d == ""
+		return reflect.ValueOf(v).String() == ""
 	case float64, float32:
-		return d == 0.0
+		return reflect.ValueOf(v).Float() == 0.0
 	case bool:
-		return d
+		return reflect.ValueOf(v).Bool() == false
 	default:
 		return d == nil
 	}
