@@ -19,7 +19,9 @@ import (
 
 	"github.com/toolkits/slice"
 
-	libs "github.com/generalzgd/deepcopy/libtools"
+	// libs "github.com/generalzgd/deepcopy/libtools"
+
+	libs `github.com/generalzgd/comm-libs`
 )
 
 var (
