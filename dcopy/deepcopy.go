@@ -17,11 +17,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/toolkits/slice"
-
-	// libs "github.com/generalzgd/deepcopy/libtools"
-
 	libs `github.com/generalzgd/comm-libs`
+	"github.com/toolkits/slice"
 )
 
 var (
@@ -33,25 +30,34 @@ func SetLog(status bool) {
 }
 
 // 获取字段名，优先使用json tag, 然后使用xorm tag, 如果没有则使用字段名的小驼峰格式
-func getFieldTag(fieldType reflect.StructField) (string, bool) {
+// return fieldname, omitempty, ignore
+func getFieldTag(fieldType reflect.StructField) (string, bool, bool) {
 	fieldName := fieldType.Tag.Get("json")
 	omitempty := false
-	if len(fieldName) < 1 || fieldName == "-" {
+	if len(fieldName) < 1 {
 		//
 		fieldName = fieldType.Tag.Get("xorm")
 		if len(fieldName) > 0 && fieldName != "extends" {
-			return fieldName, false
+			return fieldName, false, false
 		}
 		//
 		fieldName = fieldType.Name
-		return libs.LowCaseString(fieldName), false
+		return libs.LowCaseString(fieldName), false, false
+
+	} else if fieldName == "-" {
+		fieldName = fieldType.Tag.Get("xorm")
+		if len(fieldName) < 1 || fieldName == "-" {
+			return "", false, true
+		} else if fieldName != "extends" {
+			return fieldName, false, false
+		}
 	}
 
 	if trr := strings.Split(fieldName, ","); len(trr) > 1 {
 		fieldName = strings.TrimSpace(trr[0]) // 过滤掉omitempty
 		omitempty = trr[1] == "omitempty"
 	}
-	return fieldName, omitempty
+	return fieldName, omitempty, false
 }
 
 func getDeepIndent(deep int) string {
@@ -155,7 +161,10 @@ func valueDeepCopy(inst reflect.Value, from interface{}, deep int, fieldName str
 				fieldType := inst.Type().Field(i)
 				field := inst.Field(i)
 
-				fieldName, _ := getFieldTag(fieldType)
+				fieldName, _, ignore := getFieldTag(fieldType)
+				if ignore {
+					continue
+				}
 				fieldValue, ok := mp[fieldName]
 				if !ok || fieldValue == nil {
 					continue
@@ -370,7 +379,10 @@ func instanceToMap(dest map[string]interface{}, from reflect.Value, deep int) (e
 	for i := 0; i < from.NumField(); i++ {
 		field := from.Field(i)
 		fieldType := from.Type().Field(i)
-		fieldName, omitempty := getFieldTag(fieldType)
+		fieldName, omitempty, ignore := getFieldTag(fieldType)
+		if ignore {
+			continue
+		}
 		if field.Kind() == reflect.Ptr {
 			field = field.Elem()
 		}
@@ -405,7 +417,7 @@ func instanceToMap(dest map[string]interface{}, from reflect.Value, deep int) (e
 			if valueEmpty(field.Interface()) && omitempty {
 				continue
 			}
-			dest[fieldName] = field.Interface()
+			dest[fieldName] = getBasicValue(field.Interface())
 		}
 	}
 	return
@@ -492,18 +504,41 @@ func instanceSliceToArr(dest []interface{}, field reflect.Value, deep int) error
 }
 
 func valueEmpty(v interface{}) bool {
-	switch d := v.(type) {
-	case int, int8, int16, int32, int64:
-		return reflect.ValueOf(v).Int() == 0
-	case uint, uint8, uint16, uint32, uint64:
-		return reflect.ValueOf(v).Uint() == 0
-	case string:
-		return reflect.ValueOf(v).String() == ""
-	case float64, float32:
-		return reflect.ValueOf(v).Float() == 0.0
-	case bool:
+	// 自定义类型，需要查看基础类型
+	t := reflect.TypeOf(v)
+	fmt.Println(t.Kind()) // map
+	switch t.Kind() {
+	case reflect.Bool:
 		return reflect.ValueOf(v).Bool() == false
+	case reflect.String:
+		return reflect.ValueOf(v).String() == ""
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return reflect.ValueOf(v).Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return reflect.ValueOf(v).Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return reflect.ValueOf(v).Float() == 0.0
 	default:
-		return d == nil
+		return v == nil
+	}
+}
+
+// 将自定义类型的数据转换成基础类型数据
+func getBasicValue(v interface{}) interface{} {
+	t := reflect.TypeOf(v)
+	fmt.Println(t.Kind()) // map
+	switch t.Kind() {
+	case reflect.Bool:
+		return reflect.ValueOf(v).Bool()
+	case reflect.String:
+		return reflect.ValueOf(v).String()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return reflect.ValueOf(v).Int()
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return reflect.ValueOf(v).Uint()
+	case reflect.Float32, reflect.Float64:
+		return reflect.ValueOf(v).Float()
+	default:
+		return v
 	}
 }
