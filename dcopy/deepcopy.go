@@ -29,10 +29,105 @@ func SetLog(status bool) {
 	log = status
 }
 
-// 获取字段名，优先使用json tag, 然后使用xorm tag, 如果没有则使用字段名的小驼峰格式
+func parseJsonTag(tagStr string) (tagName string, omitempty, ignore bool) {
+	if tagStr == "" {
+		return
+	}
+	if tagStr == "-" {
+		ignore = true
+		return
+	}
+	tagName = tagStr
+	arr := strings.Split(tagStr,",")
+	if len(arr) > 1 {
+		tagName = arr[0]
+		omitempty = arr[1] == "omitempty"
+		return
+	}
+	return
+}
+
+func parseXormTag(tagStr string) (tagName string, omitempty, ignore bool) {
+	if tagStr == "" {
+		return
+	}
+	if tagStr == "-" {
+		ignore = true
+		return
+	}
+	tagName = tagStr
+	// todo 过滤extends等关键字
+	return
+}
+
+func parseGormTag(tagStr string) (tagName string, omitempty, ignore bool) {
+	if tagStr == "" {
+		return
+	}
+	if tagStr == "-" {
+		ignore = true
+		return
+	}
+	arr := strings.Split(tagStr,";")
+	for _, it := range arr {
+		kv := strings.Split(it,":")
+		if len(kv) == 1 {
+			tagName = kv[0]
+			continue
+		} else if len(kv) == 2 {
+			if strings.TrimSpace(kv[0]) == "column" {
+				tagName = strings.TrimSpace(kv[1])
+				break
+			}
+		}
+	}
+	return
+}
+
+
+func parseTagName(field reflect.StructField, tag string) (name string, omitempty, ignore bool) {
+	name = field.Tag.Get(tag)
+	parseHandle := map[string]func(string)(string,bool,bool){
+		"json": parseJsonTag,
+		"xorm": parseXormTag,
+		"gorm": parseGormTag,
+	}
+	if handle, ok := parseHandle[tag]; ok {
+		return handle(name)
+	}
+	return
+}
+
+// 获取字段名优先级, json tag -> gorm tag -> xorm tag -> FileName, 如果没有则使用字段名的小驼峰格式
 // return fieldname, omitempty, ignore
-func getFieldTag(fieldType reflect.StructField) (string, bool, bool) {
-	fieldName := fieldType.Tag.Get("json")
+func getFieldTag(fieldType reflect.StructField) (fieldName string, omitempty bool, ignore bool) {
+	fieldName, omitempty, ignore = parseTagName(fieldType, "json")
+	if len(fieldName)>0 || ignore {
+		if ignore {
+			fieldName = libs.LowCaseString(fieldType.Name)
+		}
+		return
+	}
+
+	fieldName, omitempty, ignore = parseTagName(fieldType, "gorm")
+	if len(fieldName)>0 || ignore {
+		if ignore {
+			fieldName = libs.LowCaseString(fieldType.Name)
+		}
+		return
+	}
+
+	fieldName, omitempty, ignore = parseTagName(fieldType,"xorm")
+	if len(fieldName)>0 || ignore {
+		if ignore {
+			fieldName = libs.LowCaseString(fieldType.Name)
+		}
+		return
+	}
+
+	fieldName = libs.LowCaseString(fieldType.Name)
+
+	/*fieldName := fieldType.Tag.Get("json")
 	omitempty := false
 	if len(fieldName) < 1 {
 		//
@@ -56,8 +151,8 @@ func getFieldTag(fieldType reflect.StructField) (string, bool, bool) {
 	if trr := strings.Split(fieldName, ","); len(trr) > 1 {
 		fieldName = strings.TrimSpace(trr[0]) // 过滤掉omitempty
 		omitempty = trr[1] == "omitempty"
-	}
-	return fieldName, omitempty, false
+	}*/
+	return // fieldName, omitempty, false
 }
 
 func getDeepIndent(deep int) string {

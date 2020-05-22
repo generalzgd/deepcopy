@@ -243,3 +243,34 @@ func TestInstanceValueFromMap(t *testing.T) {
 		})
 	}
 }
+
+type FooFieldTest struct {
+	A0 int
+	A string `json:"a"`
+	B string `json:"a,omitempty"`
+	B2 string `json:"-"`
+	C int `xorm:"c"`
+	C2 int `xorm:"-"`
+	D string `gorm:"d"`
+	D2 string `gorm:"-"`
+	E string `gorm:"column:e"`
+	F string `gorm:"type:longtext;f"`
+}
+
+func Test_getFieldTag(t *testing.T) {
+
+	obj := FooFieldTest{}
+
+	inst := reflect.ValueOf(obj)
+	for i:=0; i<inst.NumField();i++{
+		// field := inst.Field(i)
+		fieldType := inst.Type().Field(i)
+		gotFieldName, gotOmitempty, gotIgnore := getFieldTag(fieldType)
+		t.Logf("*********************************************************")
+		t.Logf("getFieldTag() gotFieldName = %v", gotFieldName)
+		t.Logf("getFieldTag() gotOmitempty = %v", gotOmitempty)
+		t.Logf("getFieldTag() gotIgnore = %v", gotIgnore)
+	}
+
+
+}
