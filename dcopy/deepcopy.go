@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	libs `github.com/generalzgd/comm-libs`
+	libs "github.com/generalzgd/comm-libs"
 	"github.com/toolkits/slice"
 )
 
@@ -242,6 +242,7 @@ func newOpts(opts ...CopyOption) args {
 	opt := args{
 		timeFmtStr:  "2006-01-02 15:04:05",
 		timeValType: TimeValType_String,
+		omitempty:   true, // default omit empty
 	}
 	for _, o := range opts {
 		o(&opt)
