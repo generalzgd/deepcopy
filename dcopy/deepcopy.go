@@ -16,17 +16,67 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	libs `github.com/generalzgd/comm-libs`
 	"github.com/toolkits/slice"
 )
 
-var (
-	log bool
+type FieldType int
+
+const (
+	FieldType_Idle FieldType = 0 + iota
+	FieldType_Origin
+	FieldType_Json
+	FieldType_Xorm
+	FieldType_Gorm
 )
 
-func SetLog(status bool) {
-	log = status
+const (
+	TimeValType_Int64  int8 = 0 + iota // 时间戳
+	TimeValType_String                 // 格式化时间字符串
+)
+
+type args struct {
+	curGetFieldType FieldType // 字段名获取方式
+	omitempty       bool      // 是否忽略0字段
+	timeFmtStr      string    // time.Time类型转换格式
+	timeValType     int8      // time.Time类型转换成timestamp还是字符串
+}
+
+var (
+	defaultOptArgs = args{
+		timeFmtStr:  "2006-01-02 15:04:05",
+		timeValType: TimeValType_String,
+	}
+)
+
+type CopyOption func(*args)
+
+// 字段名获取方式
+func WithFieldType(tpe FieldType) CopyOption {
+	return func(a *args) {
+		a.curGetFieldType = tpe
+	}
+}
+
+// 原始字段如果空，是否忽略
+func WithOmitempty(omitempty bool) CopyOption {
+	return func(a *args) {
+		a.omitempty = omitempty
+	}
+}
+
+func WithTimeFormatStr(format string) CopyOption {
+	return func(a *args) {
+		a.timeFmtStr = format
+	}
+}
+
+func WithTimeValType(valTpe int8) CopyOption {
+	return func(a *args) {
+		a.timeValType = valTpe
+	}
 }
 
 func parseJsonTag(tagStr string) (tagName string, omitempty, ignore bool) {
@@ -38,7 +88,7 @@ func parseJsonTag(tagStr string) (tagName string, omitempty, ignore bool) {
 		return
 	}
 	tagName = tagStr
-	arr := strings.Split(tagStr,",")
+	arr := strings.Split(tagStr, ",")
 	if len(arr) > 1 {
 		tagName = arr[0]
 		omitempty = arr[1] == "omitempty"
@@ -68,9 +118,9 @@ func parseGormTag(tagStr string) (tagName string, omitempty, ignore bool) {
 		ignore = true
 		return
 	}
-	arr := strings.Split(tagStr,";")
+	arr := strings.Split(tagStr, ";")
 	for _, it := range arr {
-		kv := strings.Split(it,":")
+		kv := strings.Split(it, ":")
 		if len(kv) == 1 {
 			tagName = kv[0]
 			continue
@@ -84,10 +134,9 @@ func parseGormTag(tagStr string) (tagName string, omitempty, ignore bool) {
 	return
 }
 
-
 func parseTagName(field reflect.StructField, tag string) (name string, omitempty, ignore bool) {
 	name = field.Tag.Get(tag)
-	parseHandle := map[string]func(string)(string,bool,bool){
+	parseHandle := map[string]func(string) (string, bool, bool){
 		"json": parseJsonTag,
 		"xorm": parseXormTag,
 		"gorm": parseGormTag,
@@ -100,59 +149,75 @@ func parseTagName(field reflect.StructField, tag string) (name string, omitempty
 
 // 获取字段名优先级, json tag -> gorm tag -> xorm tag -> FileName, 如果没有则使用字段名的小驼峰格式
 // return fieldname, omitempty, ignore
-func getFieldTag(fieldType reflect.StructField) (fieldName string, omitempty bool, ignore bool) {
-	fieldName, omitempty, ignore = parseTagName(fieldType, "json")
-	if len(fieldName)>0 || ignore {
-		if ignore {
-			fieldName = libs.LowCaseString(fieldType.Name)
-		}
-		return
-	}
-
-	fieldName, omitempty, ignore = parseTagName(fieldType, "gorm")
-	if len(fieldName)>0 || ignore {
-		if ignore {
-			fieldName = libs.LowCaseString(fieldType.Name)
-		}
-		return
-	}
-
-	fieldName, omitempty, ignore = parseTagName(fieldType,"xorm")
-	if len(fieldName)>0 || ignore {
-		if ignore {
-			fieldName = libs.LowCaseString(fieldType.Name)
-		}
-		return
-	}
-
-	fieldName = libs.LowCaseString(fieldType.Name)
-
-	/*fieldName := fieldType.Tag.Get("json")
-	omitempty := false
-	if len(fieldName) < 1 {
-		//
-		fieldName = fieldType.Tag.Get("xorm")
-		if len(fieldName) > 0 && fieldName != "extends" {
-			return fieldName, false, false
-		}
-		//
+func getFieldTag(fieldType reflect.StructField, optArgs *args) (fieldName string, omitempty bool, ignore bool) {
+	switch optArgs.curGetFieldType {
+	case FieldType_Origin:
 		fieldName = fieldType.Name
-		return libs.LowCaseString(fieldName), false, false
-
-	} else if fieldName == "-" {
-		fieldName = fieldType.Tag.Get("xorm")
-		if len(fieldName) < 1 || fieldName == "-" {
-			return "", false, true
-		} else if fieldName != "extends" {
-			return fieldName, false, false
+		omitempty = optArgs.omitempty
+		return
+	case FieldType_Json:
+		fieldName, omitempty, ignore = parseTagName(fieldType, "json")
+		if len(fieldName) > 0 || ignore {
+			if ignore {
+				fieldName = littleCamelCase(fieldType.Name)
+			}
+			return
 		}
+		fieldName = littleCamelCase(fieldType.Name)
+		return
+	case FieldType_Gorm:
+		fieldName, omitempty, ignore = parseTagName(fieldType, "gorm")
+		omitempty = optArgs.omitempty
+		if len(fieldName) > 0 || ignore {
+			if ignore {
+				fieldName = littleCamelCase(fieldType.Name)
+			}
+			return
+		}
+		fieldName = littleCamelCase(fieldType.Name)
+		return
+	case FieldType_Xorm:
+		fieldName, omitempty, ignore = parseTagName(fieldType, "xorm")
+		omitempty = optArgs.omitempty
+		if len(fieldName) > 0 || ignore {
+			if ignore {
+				fieldName = littleCamelCase(fieldType.Name)
+			}
+			return
+		}
+		fieldName = littleCamelCase(fieldType.Name)
+		return
+	default:
+		fieldName, omitempty, ignore = parseTagName(fieldType, "json")
+		if len(fieldName) > 0 || ignore {
+			if ignore {
+				fieldName = littleCamelCase(fieldType.Name)
+			}
+			return
+		}
+
+		fieldName, omitempty, ignore = parseTagName(fieldType, "gorm")
+		omitempty = optArgs.omitempty
+		if len(fieldName) > 0 || ignore {
+			if ignore {
+				fieldName = littleCamelCase(fieldType.Name)
+			}
+			return
+		}
+
+		fieldName, omitempty, ignore = parseTagName(fieldType, "xorm")
+		omitempty = optArgs.omitempty
+		if len(fieldName) > 0 || ignore {
+			if ignore {
+				fieldName = littleCamelCase(fieldType.Name)
+			}
+			return
+		}
+
+		fieldName = littleCamelCase(fieldType.Name)
+		return // fieldName, omitempty, false
 	}
 
-	if trr := strings.Split(fieldName, ","); len(trr) > 1 {
-		fieldName = strings.TrimSpace(trr[0]) // 过滤掉omitempty
-		omitempty = trr[1] == "omitempty"
-	}*/
-	return // fieldName, omitempty, false
 }
 
 func getDeepIndent(deep int) string {
@@ -163,23 +228,38 @@ func getDeepIndent(deep int) string {
 }
 
 func printLog(deep int, args ...interface{}) {
-	if log {
+	if beLog {
 		tmp := make([]interface{}, 0, len(args)+1)
 		tmp = append(tmp, getDeepIndent(deep))
 		tmp = append(tmp, args...)
 		fmt.Println(tmp...)
+		//
+		logger.Println(tmp...)
 	}
 }
 
-func InstanceFromBytes(dest interface{}, from []byte) (err error) {
+func newOpts(opts ...CopyOption) args {
+	opt := args{
+		timeFmtStr:  "2006-01-02 15:04:05",
+		timeValType: TimeValType_String,
+	}
+	for _, o := range opts {
+		o(&opt)
+	}
+	return opt
+}
+
+func InstanceFromBytes(dest interface{}, from []byte, opts ...CopyOption) (err error) {
+	// optArgs := newOpts(opts...)
 	tmp := map[string]interface{}{}
 	if err := json.Unmarshal(from, &tmp); err != nil {
 		return err
 	}
-	return InstanceFromMap(dest, tmp)
+	return InstanceFromMap(dest, tmp, opts...)
 }
 
-func InstanceFromMap(dest interface{}, from interface{}) (err error) {
+func InstanceFromMap(dest interface{}, from interface{}, opts ...CopyOption) (err error) {
+	optArgs := newOpts(opts...)
 	defer func() {
 		if r := recover(); r != nil {
 			err = errors.New(libs.Interface2String(r))
@@ -189,14 +269,15 @@ func InstanceFromMap(dest interface{}, from interface{}) (err error) {
 
 	inst := reflect.ValueOf(dest)
 	if inst.Kind() == reflect.Ptr {
-		err = valueDeepCopy(inst.Elem(), from, 0, "")
+		err = valueDeepCopy(inst.Elem(), from, 0, "", &optArgs)
 	} else {
 		err = errors.New("not ptr type")
 	}
 	return
 }
 
-func InstanceValueFromMap(dest reflect.Value, from interface{}) (err error) {
+func InstanceValueFromMap(dest reflect.Value, from interface{}, opts ...CopyOption) (err error) {
+	optArgs := newOpts(opts...)
 	defer func() {
 		if r := recover(); r != nil {
 			err = errors.New(libs.Interface2String(r))
@@ -204,16 +285,16 @@ func InstanceValueFromMap(dest reflect.Value, from interface{}) (err error) {
 		}
 	}()
 	if dest.Kind() == reflect.Ptr {
-		err = valueDeepCopy(dest.Elem(), from, 0, "")
+		err = valueDeepCopy(dest.Elem(), from, 0, "", &optArgs)
 	} else {
-		err = valueDeepCopy(dest, from, 0, "")
+		err = valueDeepCopy(dest, from, 0, "", &optArgs)
 	}
 	return
 }
 
 // 将泛型数据map[string]interface{}, 通过reflect深度拷贝到对应的结构体中
 // 如果直接调用此方法，需要外部捕获panic
-func valueDeepCopy(inst reflect.Value, from interface{}, deep int, fieldName string) (err error) {
+func valueDeepCopy(inst reflect.Value, from interface{}, deep int, fieldName string, optArgs *args) (err error) {
 	if !inst.CanSet() {
 		return errors.New("target cannt be set")
 	}
@@ -242,12 +323,25 @@ func valueDeepCopy(inst reflect.Value, from interface{}, deep int, fieldName str
 		it := reflect.New(inst.Type().Elem())
 		printLog(deep, "Ptr>>:", it.String())
 
-		err = valueDeepCopy(it.Elem(), from, deep+1, fieldName)
+		err = valueDeepCopy(it.Elem(), from, deep+1, fieldName, optArgs)
 		if err != nil {
 			return
 		}
 		inst.Set(it)
 	case reflect.Struct:
+		if inst.Type().String() == "time.Time" {
+			if optArgs.timeValType == TimeValType_String {
+				timeStr := libs.Interface2String(from)
+				if t, err := time.ParseInLocation(optArgs.timeFmtStr, timeStr, time.Local); err == nil {
+					inst.Set(reflect.ValueOf(t))
+				}
+			} else if optArgs.timeValType == TimeValType_Int64 {
+				timestamp := libs.Interface2Int64(from)
+				t := time.Unix(timestamp, 0)
+				inst.Set(reflect.ValueOf(t))
+			}
+			return nil
+		}
 		if mp, ok := from.(map[string]interface{}); ok {
 			printLog(deep, "Struct>>:", inst.String())
 
@@ -256,17 +350,22 @@ func valueDeepCopy(inst reflect.Value, from interface{}, deep int, fieldName str
 				fieldType := inst.Type().Field(i)
 				field := inst.Field(i)
 
-				fieldName, _, ignore := getFieldTag(fieldType)
+				fieldName, _, ignore := getFieldTag(fieldType, optArgs)
 				if ignore {
 					continue
 				}
-				fieldValue, ok := mp[fieldName]
-				if !ok || fieldValue == nil {
-					continue
-				}
-				err = valueDeepCopy(field, fieldValue, deep+1, fieldName)
-				if err != nil {
-					return
+
+				if fieldType.Anonymous {
+					valueDeepCopy(field, mp, deep+1, fieldName, optArgs)
+				} else {
+					fieldValue, ok := mp[fieldName]
+					if !ok || fieldValue == nil {
+						continue
+					}
+					err = valueDeepCopy(field, fieldValue, deep+1, fieldName, optArgs)
+					if err != nil {
+						return
+					}
 				}
 				// printlog(getDeepIndident(deep+1),"field name:", fieldName, "value:", field.Interface(), "kind:",field.Kind())
 			}
@@ -277,7 +376,7 @@ func valueDeepCopy(inst reflect.Value, from interface{}, deep int, fieldName str
 			mp := reflect.MakeMap(inst.Type())
 			printLog(deep, "Map>>:", mp.String())
 
-			err = mapValueDeepCopy(mp, vv, deep+1, fieldName)
+			err = mapValueDeepCopy(mp, vv, deep+1, fieldName, optArgs)
 			if err != nil {
 				return
 			}
@@ -288,7 +387,7 @@ func valueDeepCopy(inst reflect.Value, from interface{}, deep int, fieldName str
 			sl := reflect.MakeSlice(inst.Type(), len(vv), cap(vv))
 			printLog(deep, "Slice>>:", sl.String())
 
-			err = sliceValueDeepCopy(sl, vv, deep+1, fieldName)
+			err = sliceValueDeepCopy(sl, vv, deep+1, fieldName, optArgs)
 			if err != nil {
 				return
 			}
@@ -300,7 +399,7 @@ func valueDeepCopy(inst reflect.Value, from interface{}, deep int, fieldName str
 	return
 }
 
-func mapValueDeepCopy(inst reflect.Value, data map[string]interface{}, deep int, fieldName string) (err error) {
+func mapValueDeepCopy(inst reflect.Value, data map[string]interface{}, deep int, fieldName string, optArgs *args) (err error) {
 	if !inst.IsValid() || inst.Kind() != reflect.Map {
 		return
 	}
@@ -326,7 +425,7 @@ func mapValueDeepCopy(inst reflect.Value, data map[string]interface{}, deep int,
 			val = reflect.New(inst.Type().Elem()).Elem()
 			printLog(deep, "Struct>>:", val.String())
 
-			err = valueDeepCopy(val, v, deep+1, "fieldName")
+			err = valueDeepCopy(val, v, deep+1, "fieldName", optArgs)
 			if err != nil {
 				return
 			}
@@ -334,7 +433,7 @@ func mapValueDeepCopy(inst reflect.Value, data map[string]interface{}, deep int,
 			val = reflect.New(inst.Type().Elem().Elem())
 			printLog(deep, "Ptr>>:", val.String())
 
-			err = valueDeepCopy(val.Elem(), v, deep+1, fieldName)
+			err = valueDeepCopy(val.Elem(), v, deep+1, fieldName, optArgs)
 			if err != nil {
 				return
 			}
@@ -343,7 +442,7 @@ func mapValueDeepCopy(inst reflect.Value, data map[string]interface{}, deep int,
 				val = reflect.MakeMap(inst.Type().Elem())
 				printLog(deep, "Map>>:", val.String())
 
-				err = mapValueDeepCopy(val, vv, deep+1, fieldName)
+				err = mapValueDeepCopy(val, vv, deep+1, fieldName, optArgs)
 				if err != nil {
 					return
 				}
@@ -355,7 +454,7 @@ func mapValueDeepCopy(inst reflect.Value, data map[string]interface{}, deep int,
 				val = reflect.MakeSlice(inst.Type().Elem(), len(vv), cap(vv))
 				printLog(deep, "Slice>>:", val.String())
 
-				err = sliceValueDeepCopy(val, vv, deep+1, fieldName)
+				err = sliceValueDeepCopy(val, vv, deep+1, fieldName, optArgs)
 				if err != nil {
 					return
 				}
@@ -369,7 +468,7 @@ func mapValueDeepCopy(inst reflect.Value, data map[string]interface{}, deep int,
 	return
 }
 
-func sliceValueDeepCopy(inst reflect.Value, slice []interface{}, deep int, fieldName string) (err error) {
+func sliceValueDeepCopy(inst reflect.Value, slice []interface{}, deep int, fieldName string, optArgs *args) (err error) {
 	if !inst.IsValid() || inst.Kind() != reflect.Slice {
 		return
 	}
@@ -394,7 +493,7 @@ func sliceValueDeepCopy(inst reflect.Value, slice []interface{}, deep int, field
 		case reflect.Struct: // []struct{}
 			printLog(deep, "Struct>>:", item.String())
 
-			err = valueDeepCopy(item, v, deep+1, fieldName)
+			err = valueDeepCopy(item, v, deep+1, fieldName, optArgs)
 			if err != nil {
 				return
 			}
@@ -403,7 +502,7 @@ func sliceValueDeepCopy(inst reflect.Value, slice []interface{}, deep int, field
 			val = reflect.New(inst.Type().Elem().Elem())
 			printLog(deep, "Ptr>>:", val.String())
 
-			err = valueDeepCopy(val.Elem(), v, deep+1, fieldName)
+			err = valueDeepCopy(val.Elem(), v, deep+1, fieldName, optArgs)
 			if err != nil {
 				return
 			}
@@ -412,7 +511,7 @@ func sliceValueDeepCopy(inst reflect.Value, slice []interface{}, deep int, field
 				val = reflect.MakeMap(inst.Type().Elem())
 				printLog(deep, "Map>>:", val.String())
 
-				err = mapValueDeepCopy(val, vv, deep+1, fieldName)
+				err = mapValueDeepCopy(val, vv, deep+1, fieldName, optArgs)
 				if err != nil {
 					return
 				}
@@ -422,7 +521,7 @@ func sliceValueDeepCopy(inst reflect.Value, slice []interface{}, deep int, field
 				val = reflect.MakeSlice(inst.Type().Elem(), len(vv), cap(vv))
 				printLog(deep, "Slice>>:", val.String())
 
-				err = sliceValueDeepCopy(val, vv, deep+1, fieldName)
+				err = sliceValueDeepCopy(val, vv, deep+1, fieldName, optArgs)
 				if err != nil {
 					return
 				}
@@ -435,7 +534,8 @@ func sliceValueDeepCopy(inst reflect.Value, slice []interface{}, deep int, field
 }
 
 //
-func InstanceToMap(from interface{}) (out map[string]interface{}, err error) {
+func InstanceToMap(from interface{}, opts ...CopyOption) (out map[string]interface{}, err error) {
+	optArgs := newOpts(opts...)
 	defer func() {
 		if r := recover(); r != nil {
 			err = errors.New(libs.Interface2String(r))
@@ -457,7 +557,7 @@ func InstanceToMap(from interface{}) (out map[string]interface{}, err error) {
 		return nil, errors.New("only process struct/map/slice type")
 	}
 	out = make(map[string]interface{}, numField)
-	err = instanceToMap(out, inst, 0)
+	err = instanceToMap(out, inst, 0, &optArgs)
 	return out, err
 }
 
@@ -466,27 +566,44 @@ var (
 	// NothingTypes = []interface{}{reflect.Array, reflect.Chan, reflect.Func, reflect.UnsafePointer}
 )
 
-func instanceToMap(dest map[string]interface{}, from reflect.Value, deep int) (err error) {
+func instanceToMap(dest map[string]interface{}, from reflect.Value, deep int, optArgs *args) (err error) {
 	if from.Kind() == reflect.Ptr {
-		return instanceToMap(dest, from.Elem(), deep)
+		return instanceToMap(dest, from.Elem(), deep, optArgs)
 	}
 
 	for i := 0; i < from.NumField(); i++ {
 		field := from.Field(i)
 		fieldType := from.Type().Field(i)
-		fieldName, omitempty, ignore := getFieldTag(fieldType)
+		fieldName, omitempty, ignore := getFieldTag(fieldType, optArgs)
 		if ignore {
 			continue
 		}
 		if field.Kind() == reflect.Ptr {
 			field = field.Elem()
 		}
-		printLog(deep, "kind:", field.Kind(), "fieldName:", fieldName, "value:", field.Interface(), "omitempty:", omitempty)
+		printLog(deep, "kind:", field.Kind(), "fieldName:", fieldName, "value:", field.Interface(), "omitempty:", omitempty, "anonymous", fieldType.Anonymous)
+
+		// 提前过来time解析
+
 		switch field.Kind() {
 		case reflect.Struct:
-			subMap := make(map[string]interface{}, field.NumField())
-			dest[fieldName] = subMap
-			if err = instanceToMap(subMap, field, deep+1); err != nil {
+			if t, ok := field.Interface().(time.Time); ok {
+				if t.IsZero() && omitempty {
+					continue
+				}
+				if optArgs.timeValType == TimeValType_String {
+					dest[fieldName] = t.Format(optArgs.timeFmtStr)
+				} else if optArgs.timeValType == TimeValType_Int64 {
+					dest[fieldName] = t.Unix()
+				}
+				continue
+			}
+			subMap := dest
+			if !fieldType.Anonymous {
+				subMap = make(map[string]interface{}, field.NumField())
+				dest[fieldName] = subMap
+			}
+			if err = instanceToMap(subMap, field, deep+1, optArgs); err != nil {
 				return
 			}
 		case reflect.Map:
@@ -494,9 +611,12 @@ func instanceToMap(dest map[string]interface{}, from reflect.Value, deep int) (e
 			if len(keys) == 0 && omitempty {
 				continue
 			}
-			subMap := make(map[string]interface{}, len(keys))
-			dest[fieldName] = subMap
-			if err = instanceMapToMap(subMap, field, deep+1); err != nil {
+			subMap := dest
+			if !fieldType.Anonymous {
+				subMap = make(map[string]interface{}, len(keys))
+				dest[fieldName] = subMap
+			}
+			if err = instanceMapToMap(subMap, field, deep+1, optArgs); err != nil {
 				return
 			}
 		case reflect.Slice:
@@ -505,7 +625,7 @@ func instanceToMap(dest map[string]interface{}, from reflect.Value, deep int) (e
 			}
 			subSlice := make([]interface{}, field.Len())
 			dest[fieldName] = subSlice
-			if err = instanceSliceToArr(subSlice, field, deep+1); err != nil {
+			if err = instanceSliceToArr(subSlice, field, deep+1, optArgs); err != nil {
 				return
 			}
 		default:
@@ -519,7 +639,7 @@ func instanceToMap(dest map[string]interface{}, from reflect.Value, deep int) (e
 }
 
 // 结构体转成map，暂时不支持map/slice类型的字段
-func instanceMapToMap(dest map[string]interface{}, field reflect.Value, deep int) error {
+func instanceMapToMap(dest map[string]interface{}, field reflect.Value, deep int, optArgs *args) error {
 	// inst := reflect.ValueOf(from)
 	if field.Kind() != reflect.Map {
 		return errors.New("field type is not map")
@@ -537,20 +657,20 @@ func instanceMapToMap(dest map[string]interface{}, field reflect.Value, deep int
 		case reflect.Struct:
 			subMap := make(map[string]interface{}, subField.NumField())
 			dest[keyStr] = subMap
-			if err := instanceToMap(subMap, subField, deep+1); err != nil {
+			if err := instanceToMap(subMap, subField, deep+1, optArgs); err != nil {
 				return err
 			}
 		case reflect.Map:
 			keys := subField.MapKeys()
 			subMap := make(map[string]interface{}, len(keys))
 			dest[keyStr] = subMap
-			if err := instanceMapToMap(subMap, subField, deep+1); err != nil {
+			if err := instanceMapToMap(subMap, subField, deep+1, optArgs); err != nil {
 				return err
 			}
 		case reflect.Slice:
 			subSlice := make([]interface{}, subField.Len())
 			dest[keyStr] = subSlice
-			if err := instanceSliceToArr(subSlice, subField, deep+1); err != nil {
+			if err := instanceSliceToArr(subSlice, subField, deep+1, optArgs); err != nil {
 				return err
 			}
 		default:
@@ -560,7 +680,7 @@ func instanceMapToMap(dest map[string]interface{}, field reflect.Value, deep int
 	return nil
 }
 
-func instanceSliceToArr(dest []interface{}, field reflect.Value, deep int) error {
+func instanceSliceToArr(dest []interface{}, field reflect.Value, deep int, optArgs *args) error {
 	if field.Kind() != reflect.Slice {
 		return errors.New("field type is not slice")
 	}
@@ -575,20 +695,20 @@ func instanceSliceToArr(dest []interface{}, field reflect.Value, deep int) error
 		case reflect.Struct:
 			subMap := make(map[string]interface{}, item.NumField())
 			dest[i] = subMap
-			if err := instanceToMap(subMap, item, deep+1); err != nil {
+			if err := instanceToMap(subMap, item, deep+1, optArgs); err != nil {
 				return err
 			}
 		case reflect.Map:
 			keys := item.MapKeys()
 			subMap := make(map[string]interface{}, len(keys))
 			dest[i] = subMap
-			if err := instanceMapToMap(subMap, item, deep+1); err != nil {
+			if err := instanceMapToMap(subMap, item, deep+1, optArgs); err != nil {
 				return err
 			}
 		case reflect.Slice:
 			subSlice := make([]interface{}, item.Len())
 			dest[i] = subSlice
-			if err := instanceSliceToArr(subSlice, item, deep+1); err != nil {
+			if err := instanceSliceToArr(subSlice, item, deep+1, optArgs); err != nil {
 				return err
 			}
 		default:
@@ -601,7 +721,7 @@ func instanceSliceToArr(dest []interface{}, field reflect.Value, deep int) error
 func valueEmpty(v interface{}) bool {
 	// 自定义类型，需要查看基础类型
 	t := reflect.TypeOf(v)
-	fmt.Println(t.Kind()) // map
+	// fmt.Println(t.Kind()) // map
 	switch t.Kind() {
 	case reflect.Bool:
 		return reflect.ValueOf(v).Bool() == false
@@ -621,7 +741,7 @@ func valueEmpty(v interface{}) bool {
 // 将自定义类型的数据转换成基础类型数据
 func getBasicValue(v interface{}) interface{} {
 	t := reflect.TypeOf(v)
-	fmt.Println(t.Kind()) // map
+	// fmt.Println(t.Kind()) // map
 	switch t.Kind() {
 	case reflect.Bool:
 		return reflect.ValueOf(v).Bool()

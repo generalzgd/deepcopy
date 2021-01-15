@@ -29,7 +29,7 @@ func main() {
 	}
 
 	target := &dcopy.CopyStruct{}
-	dcopy.SetLog(true)
+	// dcopy.SetLog(true)
 	if err := dcopy.InstanceFromMap(target, testDetail); err != nil {
 		fmt.Println("deep copy run err.", err)
 	} else {

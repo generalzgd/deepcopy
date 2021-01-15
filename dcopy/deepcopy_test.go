@@ -16,6 +16,9 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
+
+	"code.dobest.com/research-go/zm-comm-v2/convert"
 )
 
 func init() {
@@ -84,7 +87,6 @@ func init() {
 }
 
 func TestDeepCopy(t *testing.T) {
-	SetLog(true)
 	// var a int
 	type args struct {
 		i    interface{}
@@ -150,6 +152,7 @@ type InnerFoo struct {
 }
 
 type Foo1 struct {
+	Time   time.Time                    `json:"time"`
 	A      int                          `json:"a"`
 	B      string                       `json:"b"`
 	Inner  InnerFoo                     `json:"inner"`
@@ -167,7 +170,8 @@ type Foo1 struct {
 }
 
 func TestInstanceToMap(t *testing.T) {
-	SetLog(true)
+	beLog = true
+	now := time.Now()
 	type args struct {
 		from interface{}
 	}
@@ -182,6 +186,7 @@ func TestInstanceToMap(t *testing.T) {
 			name: "t1",
 			args: args{
 				from: &Foo1{
+					Time:   now,
 					A:      1,
 					B:      "abc",
 					ArrInt: []int{1, 2, 3},
@@ -197,13 +202,13 @@ func TestInstanceToMap(t *testing.T) {
 					MapStu: map[string]InnerFoo{"m4": {TT: "m4"}},
 				},
 			},
-			want:    map[string]interface{}{"a": 1, "b": "abc"},
+			want:    map[string]interface{}{"a": 1, "b": "abc", "time": now.Unix()},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := InstanceToMap(tt.args.from)
+			got, err := InstanceToMap(tt.args.from, WithTimeValType(TimeValType_Int64))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("StructToMap() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -215,9 +220,42 @@ func TestInstanceToMap(t *testing.T) {
 	}
 }
 
-func TestInstanceValueFromMap(t *testing.T) {
+func TestInstanceFromMap(t *testing.T) {
+	now := time.Now()
+	dest := &Foo1{}
 	type args struct {
-		dest reflect.Value
+		dest interface{}
+		from interface{}
+		opts []CopyOption
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "InstanceFromMap",
+			args: args{
+				dest: dest,
+				from: map[string]interface{}{"a": 1, "b": "abc", "time": convert.Interface2String(now.Unix())},
+				opts: nil,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := InstanceFromMap(tt.args.dest, tt.args.from, WithTimeValType(TimeValType_Int64)); (err != nil) != tt.wantErr {
+				t.Errorf("InstanceFromMap() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			fmt.Println(tt.args.dest)
+		})
+	}
+}
+
+func TestInstanceValueFromMap(t *testing.T) {
+	beLog = true
+	type args struct {
+		dest *Foo1
 		from interface{}
 	}
 	tests := []struct {
@@ -227,34 +265,42 @@ func TestInstanceValueFromMap(t *testing.T) {
 	}{
 		// TODO: Add test cases.
 		{
-			name:"TestInstanceValueFromMap",
-			args:args{
-				dest:reflect.ValueOf(&Foo1{}),
-				from:map[string]interface{}{},
+			name: "TestInstanceValueFromMap",
+			args: args{
+				dest: &Foo1{},
+				from: map[string]interface{}{
+					"time": "2020-10-16 00:00:00",
+				},
 			},
-			wantErr:false,
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := InstanceValueFromMap(tt.args.dest, tt.args.from); (err != nil) != tt.wantErr {
+			if err := InstanceValueFromMap(reflect.ValueOf(tt.args.dest), tt.args.from); (err != nil) != tt.wantErr {
 				t.Errorf("InstanceValueFromMap() error = %v, wantErr %v", err, tt.wantErr)
 			}
+			t.Logf("%v", tt.args.dest)
 		})
 	}
 }
 
+type Common struct {
+	Code int
+}
+
 type FooFieldTest struct {
+	Common
 	A0 int
-	A string `json:"a"`
-	B string `json:"a,omitempty"`
+	A  string `json:"a"`
+	B  string `json:"a,omitempty"`
 	B2 string `json:"-"`
-	C int `xorm:"c"`
-	C2 int `xorm:"-"`
-	D string `gorm:"d"`
+	C  int    `xorm:"c"`
+	C2 int    `xorm:"-"`
+	D  string `gorm:"d"`
 	D2 string `gorm:"-"`
-	E string `gorm:"column:e"`
-	F string `gorm:"type:longtext;f"`
+	E  string `gorm:"column:e"`
+	F  string `gorm:"type:longtext;f"`
 }
 
 func Test_getFieldTag(t *testing.T) {
@@ -262,15 +308,14 @@ func Test_getFieldTag(t *testing.T) {
 	obj := FooFieldTest{}
 
 	inst := reflect.ValueOf(obj)
-	for i:=0; i<inst.NumField();i++{
+	for i := 0; i < inst.NumField(); i++ {
 		// field := inst.Field(i)
 		fieldType := inst.Type().Field(i)
-		gotFieldName, gotOmitempty, gotIgnore := getFieldTag(fieldType)
+		gotFieldName, gotOmitempty, gotIgnore := getFieldTag(fieldType, &defaultOptArgs)
 		t.Logf("*********************************************************")
 		t.Logf("getFieldTag() gotFieldName = %v", gotFieldName)
 		t.Logf("getFieldTag() gotOmitempty = %v", gotOmitempty)
 		t.Logf("getFieldTag() gotIgnore = %v", gotIgnore)
 	}
-
 
 }

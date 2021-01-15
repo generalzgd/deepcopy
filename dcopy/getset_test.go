@@ -30,6 +30,7 @@ func TestGetFieldValue(t *testing.T) {
 		E:  "E",
 		F:  "F",
 	}
+	obj.Code = 1
 	objPtr := &obj
 
 	type args struct {
@@ -42,6 +43,14 @@ func TestGetFieldValue(t *testing.T) {
 		want interface{}
 	}{
 		// TODO: Add test cases.
+		{
+			name: "TestGetFieldValue_0",
+			args: args{
+				target: obj,
+				field:  "Code",
+			},
+			want: 1,
+		},
 		{
 			name: "TestGetFieldValue_1",
 			args: args{
@@ -106,7 +115,15 @@ func TestSetFieldValue(t *testing.T) {
 	}{
 		// TODO: Add test cases.
 		{
-			name: "TestSetFieldValue_2",
+			name: "TestSetFieldValue_0",
+			args: args{
+				target:         obj,
+				fieldOrTagName: "Code",
+				value:          1,
+			},
+		},
+		{
+			name: "TestSetFieldValue_1",
 			args: args{
 				target:         obj,
 				fieldOrTagName: "a0",
