@@ -18,7 +18,6 @@ import (
 	"strings"
 	"time"
 
-	libs "github.com/generalzgd/comm-libs"
 	"github.com/toolkits/slice"
 )
 
@@ -38,16 +37,18 @@ const (
 )
 
 type args struct {
-	curGetFieldType FieldType // 字段名获取方式
-	omitempty       bool      // 是否忽略0字段
-	timeFmtStr      string    // time.Time类型转换格式
-	timeValType     int8      // time.Time类型转换成timestamp还是字符串
+	curGetFieldType FieldType           // 字段名获取方式
+	omitempty       bool                // 是否忽略0字段
+	timeFmtStr      string              // time.Time类型转换格式
+	timeValType     int8                // time.Time类型转换成timestamp还是字符串
+	ignoreFieldMap  map[string]struct{} // 需要忽略的字段
 }
 
 var (
 	defaultOptArgs = args{
-		timeFmtStr:  "2006-01-02 15:04:05",
-		timeValType: TimeValType_String,
+		timeFmtStr:     "2006-01-02 15:04:05",
+		timeValType:    TimeValType_String,
+		ignoreFieldMap: map[string]struct{}{},
 	}
 )
 
@@ -76,6 +77,17 @@ func WithTimeFormatStr(format string) CopyOption {
 func WithTimeValType(valTpe int8) CopyOption {
 	return func(a *args) {
 		a.timeValType = valTpe
+	}
+}
+
+// 自动忽略大小写
+func WithIgnoreFields(fieldNames ...string) CopyOption {
+	return func(a *args) {
+		tmp := make(map[string]struct{}, len(fieldNames))
+		for _, name := range fieldNames {
+			tmp[strings.ToLower(name)] = struct{}{}
+		}
+		a.ignoreFieldMap = tmp
 	}
 }
 
@@ -240,9 +252,9 @@ func printLog(deep int, args ...interface{}) {
 
 func newOpts(opts ...CopyOption) args {
 	opt := args{
-		timeFmtStr:  "2006-01-02 15:04:05",
-		timeValType: TimeValType_String,
-		omitempty:   true, // default omit empty
+		timeFmtStr:     "2006-01-02 15:04:05",
+		timeValType:    TimeValType_String,
+		ignoreFieldMap: map[string]struct{}{},
 	}
 	for _, o := range opts {
 		o(&opt)
@@ -263,7 +275,7 @@ func InstanceFromMap(dest interface{}, from interface{}, opts ...CopyOption) (er
 	optArgs := newOpts(opts...)
 	defer func() {
 		if r := recover(); r != nil {
-			err = errors.New(libs.Interface2String(r))
+			err = errors.New(interface2String(r))
 			printLog(0, r)
 		}
 	}()
@@ -281,7 +293,7 @@ func InstanceValueFromMap(dest reflect.Value, from interface{}, opts ...CopyOpti
 	optArgs := newOpts(opts...)
 	defer func() {
 		if r := recover(); r != nil {
-			err = errors.New(libs.Interface2String(r))
+			err = errors.New(interface2String(r))
 			printLog(0, r)
 		}
 	}()
@@ -303,19 +315,19 @@ func valueDeepCopy(inst reflect.Value, from interface{}, deep int, fieldName str
 	// printlog("target name>>:", inst.Type().String(), inst.Kind())
 	switch inst.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		v := libs.Interface2Int64(from)
+		v := interface2Int64(from)
 		inst.SetInt(v)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		v := libs.Interface2Uint64(from)
+		v := interface2Uint64(from)
 		inst.SetUint(v)
 	case reflect.Float32, reflect.Float64:
-		v := libs.Interface2Float64(from)
+		v := interface2Float64(from)
 		inst.SetFloat(v)
 	case reflect.String:
-		v := libs.Interface2String(from)
+		v := interface2String(from)
 		inst.SetString(v)
 	case reflect.Bool:
-		v := libs.Interface2Bool(from)
+		v := interface2Bool(from)
 		inst.SetBool(v)
 	case reflect.Interface:
 		val := reflect.ValueOf(from)
@@ -332,12 +344,12 @@ func valueDeepCopy(inst reflect.Value, from interface{}, deep int, fieldName str
 	case reflect.Struct:
 		if inst.Type().String() == "time.Time" {
 			if optArgs.timeValType == TimeValType_String {
-				timeStr := libs.Interface2String(from)
+				timeStr := interface2String(from)
 				if t, err := time.ParseInLocation(optArgs.timeFmtStr, timeStr, time.Local); err == nil {
 					inst.Set(reflect.ValueOf(t))
 				}
 			} else if optArgs.timeValType == TimeValType_Int64 {
-				timestamp := libs.Interface2Int64(from)
+				timestamp := interface2Int64(from)
 				t := time.Unix(timestamp, 0)
 				inst.Set(reflect.ValueOf(t))
 			}
@@ -413,13 +425,13 @@ func mapValueDeepCopy(inst reflect.Value, data map[string]interface{}, deep int,
 		switch kind {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			val = reflect.ValueOf(libs.Interface2Int(v))
+			val = reflect.ValueOf(interface2Int(v))
 		case reflect.Float32, reflect.Float64:
-			val = reflect.ValueOf(libs.Interface2Float64(v))
+			val = reflect.ValueOf(interface2Float64(v))
 		case reflect.String:
-			val = reflect.ValueOf(libs.Interface2String(v))
+			val = reflect.ValueOf(interface2String(v))
 		case reflect.Bool:
-			val = reflect.ValueOf(libs.Interface2Bool(v))
+			val = reflect.ValueOf(interface2Bool(v))
 		case reflect.Interface:
 			val = reflect.ValueOf(v)
 		case reflect.Struct: // map[string]TestStruct
@@ -482,13 +494,13 @@ func sliceValueDeepCopy(inst reflect.Value, slice []interface{}, deep int, field
 		switch kind {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			val = reflect.ValueOf(libs.Interface2Int(v))
+			val = reflect.ValueOf(interface2Int(v))
 		case reflect.Float32, reflect.Float64:
-			val = reflect.ValueOf(libs.Interface2Float64(v))
+			val = reflect.ValueOf(interface2Float64(v))
 		case reflect.String:
-			val = reflect.ValueOf(libs.Interface2String(v))
+			val = reflect.ValueOf(interface2String(v))
 		case reflect.Bool:
-			val = reflect.ValueOf(libs.Interface2Bool(v))
+			val = reflect.ValueOf(interface2Bool(v))
 		case reflect.Interface:
 			val = reflect.ValueOf(v)
 		case reflect.Struct: // []struct{}
@@ -539,7 +551,7 @@ func InstanceToMap(from interface{}, opts ...CopyOption) (out map[string]interfa
 	optArgs := newOpts(opts...)
 	defer func() {
 		if r := recover(); r != nil {
-			err = errors.New(libs.Interface2String(r))
+			err = errors.New(interface2String(r))
 			printLog(0, r)
 		}
 	}()
@@ -577,6 +589,10 @@ func instanceToMap(dest map[string]interface{}, from reflect.Value, deep int, op
 		fieldType := from.Type().Field(i)
 		fieldName, omitempty, ignore := getFieldTag(fieldType, optArgs)
 		if ignore {
+			continue
+		}
+		// 指定需要忽略的字段
+		if _, ok := optArgs.ignoreFieldMap[fieldName]; ok {
 			continue
 		}
 		if field.Kind() == reflect.Ptr {
@@ -648,7 +664,7 @@ func instanceMapToMap(dest map[string]interface{}, field reflect.Value, deep int
 
 	keys := field.MapKeys()
 	for _, key := range keys {
-		keyStr := libs.Interface2String(key.Interface())
+		keyStr := interface2String(key.Interface())
 		subField := field.MapIndex(key)
 		if subField.Kind() == reflect.Ptr {
 			subField = subField.Elem()

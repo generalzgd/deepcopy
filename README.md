@@ -1,7 +1,9 @@
 # deepcopy
 
 # 用途：
-解析json数据到目标结构体上
+- 解析json数据到目标结构体上
+- 解析map数据到结构体
+- 转换结构体到map
 
 # 场景：
 得到的json数据可能是弱类型语言生成的数据，例如php生成的数字类型的字段，数据可能会带上引号，变成了字符串类型。
@@ -16,7 +18,7 @@
 如果来源数据的字段类型不确定，但是字段名一致的情况下，推荐使用。
 
 
-#usage1:
+# usage1:
 
 ```
 bytes := []byte({...json数据...}) //举例, 具体可参考deepcopy_test.go文件
@@ -35,7 +37,7 @@ if err := dcopy.DeepCopy(target, testDetail); err != nil {
 }
 ```
 
-#usage2:
+# usage2:
 ```
 type Args struct {
     AA int `json:"aa"`
@@ -46,3 +48,29 @@ data := &Args{}
 dcopy.DeepCopyFromBytes(data, []byte(jsonStr))
 ```
 
+# useage3:
+```
+type Args struct {
+	AA int `json:"aa"`
+}
+
+data := &Args{123}
+
+kvs, err := dcopy.InstanceToMap(data,
+    dcopy.WithFieldType(dcopy.FieldType_Json), // 取json标签
+    dcopy.WithOmitempty(true), // 忽略0值
+)
+fmt.Println(kvs) // {aa:123}
+```
+
+# usage4
+```
+type Args struct{
+	AA int `json:"aa"`
+}
+kvs := map[string]interface{}{
+    "aa":123,
+}
+dist := Args{}
+err := dcopy.InstanceFromMap(&dist, kvs, dcopy.WithFieldType(dcopy.FieldType_Json))
+```

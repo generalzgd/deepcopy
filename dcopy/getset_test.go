@@ -147,3 +147,131 @@ func TestSetFieldValue(t *testing.T) {
 		})
 	}
 }
+
+func TestGetFieldsTagName(t *testing.T) {
+	type args struct {
+		target       interface{}
+		fieldType    FieldType
+		ignoreFields []string
+	}
+	tests := []struct {
+		name string
+		args args
+		want []string
+	}{
+		// TODO: Add test cases.
+		{
+			name: "TestGetFieldsTagName",
+			args: args{
+				target:       &FooFieldTest{},
+				fieldType:    FieldType_Gorm,
+				ignoreFields: []string{"d"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := GetFieldsTagName(tt.args.target, tt.args.fieldType, tt.args.ignoreFields); !reflect.DeepEqual(got, tt.want) {
+				t.Logf("GetFieldsTagName() = %v", got)
+			}
+		})
+	}
+}
+
+func TestGetFieldsValue(t *testing.T) {
+	type args struct {
+		target       interface{}
+		omitempty    bool
+		fieldType    FieldType
+		ignoreFields []string
+	}
+	tests := []struct {
+		name string
+		args args
+		want []interface{}
+	}{
+		// TODO: Add test cases.
+		{
+			name: "TestGetFieldsValue",
+			args: args{
+				target: &FooFieldTest{
+					A0: 1,
+					A:  "asdfa",
+					B:  "dd",
+					B2: "basdf",
+					C:  3,
+					C2: 1,
+					D:  "ad",
+					D2: "zxcv",
+					E:  "234",
+					F:  "sda",
+				},
+				omitempty:    false,
+				fieldType:    FieldType_Gorm,
+				ignoreFields: []string{"d"},
+			},
+		},
+		{
+			name: "TestGetFieldsValue_omitempty",
+			args: args{
+				target: &FooFieldTest{
+					A0: 1,
+					A:  "asdfa",
+					B:  "dd",
+					B2: "basdf",
+					C:  3,
+					C2: 1,
+					D:  "ad",
+					D2: "zxcv",
+					E:  "234",
+					F:  "sda",
+				},
+				omitempty:    true,
+				fieldType:    FieldType_Gorm,
+				ignoreFields: []string{"d"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := GetFieldsValue(tt.args.target, tt.args.omitempty, tt.args.fieldType, tt.args.ignoreFields); !reflect.DeepEqual(got, tt.want) {
+				t.Logf("GetFieldsValue() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetZeroFields(t *testing.T) {
+	type a struct {
+		AaXx int32 `json:"aa_xx"`
+		BbYy int32 `json:"bb_yy"`
+		CcZz int32 `json:"cc_zz"`
+	}
+	s := a{
+		AaXx: 0,
+		BbYy: 1,
+		CcZz: 0,
+	}
+	type args struct {
+		target    interface{}
+		fieldType FieldType
+	}
+	tests := []struct {
+		name string
+		args args
+	}{
+		{
+			name: "TestGetZeroFields",
+			args: args{
+				target:    s,
+				fieldType: FieldType_Json,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GetZeroFields(tt.args.target, tt.args.fieldType)
+			t.Logf("GetZeroFields() = %v", got)
+		})
+	}
+}

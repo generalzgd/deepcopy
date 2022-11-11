@@ -17,8 +17,6 @@ import (
 	"reflect"
 	"testing"
 	"time"
-
-	"code.dobest.com/research-go/zm-comm-v2/convert"
 )
 
 func init() {
@@ -208,7 +206,7 @@ func TestInstanceToMap(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := InstanceToMap(tt.args.from, WithTimeValType(TimeValType_Int64))
+			got, err := InstanceToMap(tt.args.from, WithTimeValType(TimeValType_Int64), WithIgnoreFields("time", "inner"))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("StructToMap() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -237,7 +235,7 @@ func TestInstanceFromMap(t *testing.T) {
 			name: "InstanceFromMap",
 			args: args{
 				dest: dest,
-				from: map[string]interface{}{"a": 1, "b": "abc", "time": convert.Interface2String(now.Unix())},
+				from: map[string]interface{}{"a": 1, "b": "abc", "time": interface2String(now.Unix())},
 				opts: nil,
 			},
 		},
