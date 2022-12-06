@@ -42,6 +42,7 @@ type args struct {
 	timeFmtStr      string              // time.Time类型转换格式
 	timeValType     int8                // time.Time类型转换成timestamp还是字符串
 	ignoreFieldMap  map[string]struct{} // 需要忽略的字段
+	printLog        bool                // 打印日志
 }
 
 var (
@@ -54,14 +55,14 @@ var (
 
 type CopyOption func(*args)
 
-// 字段名获取方式
+// WithFieldType 字段名获取方式
 func WithFieldType(tpe FieldType) CopyOption {
 	return func(a *args) {
 		a.curGetFieldType = tpe
 	}
 }
 
-// 原始字段如果空，是否忽略
+// WithOmitempty 原始字段如果空，是否忽略
 func WithOmitempty(omitempty bool) CopyOption {
 	return func(a *args) {
 		a.omitempty = omitempty
@@ -80,7 +81,7 @@ func WithTimeValType(valTpe int8) CopyOption {
 	}
 }
 
-// 自动忽略大小写
+// WithIgnoreFields 自动忽略大小写
 func WithIgnoreFields(fieldNames ...string) CopyOption {
 	return func(a *args) {
 		tmp := make(map[string]struct{}, len(fieldNames))
@@ -88,6 +89,13 @@ func WithIgnoreFields(fieldNames ...string) CopyOption {
 			tmp[strings.ToLower(name)] = struct{}{}
 		}
 		a.ignoreFieldMap = tmp
+	}
+}
+
+// WitLog 打印日志
+func WitLog(print bool) CopyOption {
+	return func(a *args) {
+		a.printLog = print
 	}
 }
 

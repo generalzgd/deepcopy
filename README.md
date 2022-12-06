@@ -34,7 +34,7 @@ if err := json.Unmarshal(bytes, &testDetail); err != nil {
 
 target := &dcopy.CopyStruct{}
 dcopy.SetLog(true)
-if err := dcopy.DeepCopy(target, testDetail); err != nil {
+if err := dcopy.InstanceFromMap(target, testDetail); err != nil {
     fmt.Println("deep copy run err.", err)
 } else {
     fmt.Println("deep copy run ok.", target)
@@ -49,7 +49,7 @@ type Args struct {
 jsonStr := `{"aa":"123"}`
 
 data := &Args{}
-dcopy.DeepCopyFromBytes(data, []byte(jsonStr))
+dcopy.InstanceFromBytes(data, []byte(jsonStr))
 ```
 
 # useage3:
@@ -77,4 +77,18 @@ kvs := map[string]interface{}{
 }
 dist := Args{}
 err := dcopy.InstanceFromMap(&dist, kvs, dcopy.WithFieldType(dcopy.FieldType_Json))
+```
+
+# usage5
+```
+type Args struct {
+    AA int
+}
+
+type Src Struct {
+    AA int
+}
+
+err := dcopy.StructCopy(&Args{}, Src{AA:100})
+fmt.Println(err)
 ```

@@ -17,7 +17,49 @@ import (
 	"github.com/generalzgd/deepcopy/dcopy"
 )
 
+type InnerObj struct {
+	Sun int
+}
+
+type Inner struct {
+	Foo string
+	*InnerObj
+}
+
+type Outer struct {
+	Inner
+	Abc string
+}
+
+func testAnonymousEncode()  {
+	obj := Outer{}
+	obj.InnerObj = &InnerObj{}
+	obj.Foo = "foo"
+	obj.Abc = "abc"
+	obj.Sun = 123
+
+	out, err := dcopy.InstanceToMap(obj)
+	fmt.Println(err)
+	fmt.Println(out)
+}
+
+func testAnonymousDecode() {
+	tmp := map[string]interface{}{
+		"abc": "abc",
+		"foo": "foo",
+		"sun": 123,
+	}
+	tar := Outer{}
+	err := dcopy.InstanceFromMap(&tar, tmp)
+	fmt.Println(err)
+	fmt.Println("out:", tar)
+}
+
 func main() {
+	// testAnonymousEncode()
+	// testAnonymousDecode()
+
+
 	bytes, err := json.Marshal(dcopy.TestData)
 	if err != nil {
 		fmt.Println("init Marshal err:", err)
@@ -29,7 +71,6 @@ func main() {
 	}
 
 	target := &dcopy.CopyStruct{}
-	// dcopy.SetLog(true)
 	if err := dcopy.InstanceFromMap(target, testDetail); err != nil {
 		fmt.Println("deep copy run err.", err)
 	} else {
