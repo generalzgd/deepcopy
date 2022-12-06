@@ -18,7 +18,7 @@ import (
 	"strings"
 )
 
-// 获取对应的字段名
+// GetFieldsTagName 获取对应的字段名
 // 只取结构体（或结构体指针）的第一层
 // 包括匿名组合
 // 按结构体定义顺序提取
@@ -69,7 +69,7 @@ func getStructFieldNames(target reflect.Value, arg *args) []string {
 	return nil
 }
 
-// 获取对应的字段名
+// GetFieldsValue 获取对应的字段名
 // 只取结构体（或结构体指针）的第一层
 // 包括匿名组合
 // 按结构体定义顺序提取
@@ -196,7 +196,7 @@ func GetNotZeroFields(target interface{}) []string {
 	return nil
 }
 
-// 获取struct对象的字段值
+// GetFieldValue 获取struct对象的字段值
 // fieldOrTagName可以是字段名，json/gorm/xorm tag, 或小驼峰字段名
 func GetFieldValue(target interface{}, fieldOrTagName string, opts ...CopyOption) interface{} {
 	if target == nil {
@@ -232,7 +232,7 @@ func getFileValue(from reflect.Value, fieldOrTagName string, optArgs *args) inte
 	return nil
 }
 
-// 对struct（必须为指针） 对象，设置对应字段的变量
+// SetFieldValue 对struct（必须为指针） 对象，设置对应字段的变量
 // fieldOrTagName可以是字段名，json/gorm/xorm tag, 或小驼峰字段名
 // 如果字段的类型和值的类型对不上，则设置的是0值，不返回错误
 func SetFieldValue(target interface{}, fieldOrTagName string, value interface{}, opts ...CopyOption) (err error) {

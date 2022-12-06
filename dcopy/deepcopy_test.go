@@ -61,7 +61,7 @@ func init() {
 		"map_map_int":     map[string]map[string]interface{}{"key": {"aa": 111}},
 		"map_map_stu":     map[string]map[string]map[string]interface{}{"key": {"aa": {"aa": 11, "bb": "bb"}}},
 		"map_map_stu_ptr": map[string]map[string]map[string]interface{}{"key": {"aa": {"aa": 11, "bb": "bb"}}},
-		"map_arr":         map[string][]interface{}{"key": {1, "arr"}},
+		"map_arr":         map[string][]interface{}{"key": {1, "Arr"}},
 		"map_arr_int":     map[string][]interface{}{"key": {1, 2}},
 		"map_arr_stu":     map[string][]map[string]interface{}{"key": {{"aa": 11, "bb": "bb1"}, {"aa": 11, "bb": "bb2"}}},
 		"map_arr_stu_ptr": map[string][]map[string]interface{}{"key": {{"aa": 11, "bb": "bb1"}, {"aa": 11, "bb": "bb2"}}},
@@ -168,7 +168,6 @@ type Foo1 struct {
 }
 
 func TestInstanceToMap(t *testing.T) {
-	beLog = true
 	now := time.Now()
 	type args struct {
 		from interface{}
@@ -251,7 +250,6 @@ func TestInstanceFromMap(t *testing.T) {
 }
 
 func TestInstanceValueFromMap(t *testing.T) {
-	beLog = true
 	type args struct {
 		dest *Foo1
 		from interface{}
@@ -291,7 +289,7 @@ type FooFieldTest struct {
 	Common
 	A0 int
 	A  string `json:"a"`
-	B  string `json:"a,omitempty"`
+	B  string `json:"b,omitempty"`
 	B2 string `json:"-"`
 	C  int    `xorm:"c"`
 	C2 int    `xorm:"-"`

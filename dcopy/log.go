@@ -12,18 +12,13 @@
 
 package dcopy
 
-import (
-	"io"
-	"log"
-	"os"
-)
-
 var (
-	beLog = false
-	logger = log.New(os.Stderr, "", log.LstdFlags)
+//beLog = false
+//logger = log.New(os.Stderr, "", log.LstdFlags)
+
 )
 
-func SetLog(writer io.Writer) {
-	logger.SetOutput(writer)
-	beLog = true
-}
+//func SetLog(writer io.Writer) {
+//	logger.SetOutput(writer)
+//	beLog = true
+//}

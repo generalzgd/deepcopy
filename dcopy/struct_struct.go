@@ -14,17 +14,18 @@ package dcopy
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 
 	"github.com/toolkits/slice"
 )
 
 //
-// StructFromStruct 结构体同字段名（同字段类型）拷贝
+// StructCopy 结构体同字段名（同字段类型）拷贝
 //  @Description:
 //  @param dest
 //  @param from
-func StructFromStruct(dest interface{}, from interface{}, opts ...CopyOption) error {
+func StructCopy(dest interface{}, from interface{}, opts ...CopyOption) error {
 	optArgs := newOpts(opts...)
 	//
 	destValue := reflect.ValueOf(dest)
@@ -45,17 +46,19 @@ func StructFromStruct(dest interface{}, from interface{}, opts ...CopyOption) er
 		return errors.New("from not struct type")
 	}
 
-	return structCopy(destValue, fromValue, optArgs)
-
+	hit, miss := structCopy(destValue, fromValue, optArgs)
+	printLog(&optArgs, 0, fmt.Sprintf("struct copy complete: hit(%d) miss(%d)", hit, miss))
+	return nil
 }
 
-func structCopy(dest, from reflect.Value, optArgs args) error {
+func structCopy(dest, from reflect.Value, optArgs args) (hit, mis int) {
 
 	for i := 0; i < dest.NumField(); i++ {
 		destFieldType := dest.Type().Field(i)
 		destField := dest.Field(i)
 		fieldName := destFieldType.Name
 		if !destField.CanSet() {
+			mis += 1
 			continue
 		}
 
@@ -65,6 +68,7 @@ func structCopy(dest, from reflect.Value, optArgs args) error {
 
 		fromField := from.FieldByName(fieldName)
 		if !fromField.IsValid() { // 找不到字段
+			mis += 1
 			continue
 		}
 
@@ -75,23 +79,33 @@ func structCopy(dest, from reflect.Value, optArgs args) error {
 		// 如果数据类型不匹配则返回错误
 		if !isFieldTypeMatch(destField, fromField) {
 			//return errors.New("field type not match")
+			mis += 1
 			continue
 		}
 
 		switch destField.Kind() {
 		case reflect.Slice:
-			sliceCopy(destField, fromField, optArgs)
+			if e := sliceCopy(destField, fromField, optArgs); e == nil {
+				hit += 1
+			} else {
+				mis += 1
+			}
 		case reflect.Map:
-			mapCopy(destField, fromField, optArgs)
+			if e := mapCopy(destField, fromField, optArgs); e == nil {
+				hit += 1
+			} else {
+				mis += 1
+			}
 		case reflect.Struct:
-			structCopy(destField, fromField, optArgs)
+			h, m := structCopy(destField, fromField, optArgs)
+			hit += h
+			mis += m
 		default:
 			basicCopy(destField, fromField, optArgs)
+			hit += 1
 		}
-
 	}
-
-	return nil
+	return
 }
 
 func mapCopy(dest, from reflect.Value, optArgs args) error {
@@ -114,7 +128,7 @@ func sliceCopy(dest, from reflect.Value, optArgs args) error {
 	return nil
 }
 
-func basicCopy(dest, from reflect.Value, optArgs args) error {
+func basicCopy(dest, from reflect.Value, optArgs args) {
 	switch dest.Kind() {
 	case reflect.String:
 		v := from.String()
@@ -132,7 +146,6 @@ func basicCopy(dest, from reflect.Value, optArgs args) error {
 		v := from.Bool()
 		dest.SetBool(v)
 	}
-	return nil
 }
 
 // isFieldTypeMatch 相识类型判断  int8,int16,int32,int64; uint8,uint16,uint32,uint64,int 归一类

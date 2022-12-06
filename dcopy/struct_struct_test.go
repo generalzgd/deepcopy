@@ -66,8 +66,8 @@ func TestStructFromStruct(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := StructFromStruct(tt.args.dest, tt.args.from, tt.args.opts...); (err != nil) != tt.wantErr {
-				t.Errorf("StructFromStruct() error = %v, wantErr %v", err, tt.wantErr)
+			if err := StructCopy(tt.args.dest, tt.args.from, tt.args.opts...); (err != nil) != tt.wantErr {
+				t.Errorf("StructCopy() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

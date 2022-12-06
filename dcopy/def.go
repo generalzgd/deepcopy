@@ -1,3 +1,4 @@
+// Package dcopy
 /**
  * @version: 1.0.0
  * @author: zhangguodong:general_zgd
@@ -9,7 +10,6 @@
  * @time: 2019/7/23 11:11
  */
 package dcopy
-
 
 type InnerStruct struct {
 	A int    `json:"aa"`
@@ -85,6 +85,6 @@ type CopyStruct struct {
 }
 
 var (
-	TestData = map[string]interface{}{}
+	TestData   = map[string]interface{}{}
 	testDetail map[string]interface{}
 )
